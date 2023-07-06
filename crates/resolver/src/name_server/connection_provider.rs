@@ -1,10 +1,3 @@
-// Copyright 2015-2019 Benjamin Fry <benjaminfry@me.com>
-//
-// Licensed under the Apache License, Version 2.0, <LICENSE-APACHE or
-// http://apache.org/licenses/LICENSE-2.0> or the MIT license <LICENSE-MIT or
-// http://opensource.org/licenses/MIT>, at your option. This file may not be
-// copied, modified, or distributed except according to those terms.
-
 use std::io;
 use std::marker::Unpin;
 use std::net::SocketAddr;
@@ -159,7 +152,11 @@ pub(crate) enum ConnectionConnect<R: RuntimeProvider> {
             TokioTime,
         >,
     ),
+    #[cfg(feature = "dns-over-http3")]
+    Http3(DnsExchangeConnect<Http3ClientConnect, Http3ClientStream, R::Timer>),
 }
+
+// Rest of the code...
 
 /// Resolves to a new Connection
 #[must_use = "futures do nothing unless polled"]
@@ -203,6 +200,12 @@ impl<R: RuntimeProvider> Future for ConnectionFuture<R> {
             }
             #[cfg(feature = "mdns")]
             ConnectionConnect::Mdns(ref mut conn) => {
+                let (conn, bg) = ready!(conn.poll_unpin(cx))?;
+                self.spawner.spawn_bg(bg);
+                GenericConnection(conn)
+            }
+            #[cfg(feature = "dns-over-http3")]
+            ConnectionConnect::Http3(ref mut conn) => {
                 let (conn, bg) = ready!(conn.poll_unpin(cx))?;
                 self.spawner.spawn_bg(bg);
                 GenericConnection(conn)
@@ -353,6 +356,15 @@ impl CreateConnection for GenericConnection {
                 let exchange = DnsExchange::connect(dns_conn);
                 ConnectionConnect::Mdns(exchange)
             }
+            #[cfg(feature = "dns-over-http3")]
+            Protocol::Http3 => {
+                let socket_addr = config.socket_addr;
+                let timeout = options.timeout;
+                let udp_future = runtime_provider.bind_udp(socket_addr, socket_addr);
+
+                let exchange = crate::http3::new_http3_stream_with_future(udp_future, socket_addr);
+                ConnectionConnect::Http3(exchange)
+            }
         };
 
         Box::new(ConnectionFuture::<P> {
@@ -446,3 +458,4 @@ pub mod tokio_runtime {
         while FutureExt::now_or_never(join_set.join_next()).is_some() {}
     }
 }
+
