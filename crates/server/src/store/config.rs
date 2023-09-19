@@ -7,8 +7,6 @@
 
 //! Configuration for the stores
 
-use serde::Deserialize;
-
 use crate::store::file::FileConfig;
 #[cfg(feature = "trust-dns-resolver")]
 use crate::store::forwarder::ForwardConfig;
@@ -18,9 +16,7 @@ use crate::store::recursor::RecursiveConfig;
 use crate::store::sqlite::SqliteConfig;
 
 /// Enumeration over all Store configurations
-#[derive(Deserialize, PartialEq, Eq, Debug)]
-#[serde(tag = "type")]
-#[serde(rename_all = "lowercase")]
+#[derive(PartialEq, Eq, Debug)]
 #[non_exhaustive]
 pub enum StoreConfig {
     /// File based configuration

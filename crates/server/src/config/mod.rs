@@ -9,22 +9,17 @@
 
 pub mod dnssec;
 
-use std::fs::File;
-use std::io::Read;
 use std::net::{AddrParseError, Ipv4Addr, Ipv6Addr};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use std::time::Duration;
 
 use cfg_if::cfg_if;
-use serde::{self, Deserialize};
-use toml;
 
 use crate::proto::error::ProtoResult;
 use crate::proto::rr::Name;
 
 use crate::authority::ZoneType;
-use crate::error::{ConfigError, ConfigResult};
 use crate::store::StoreConfig;
 
 static DEFAULT_PATH: &str = "/var/named"; // TODO what about windows (do I care? ;)
@@ -35,13 +30,11 @@ static DEFAULT_QUIC_PORT: u16 = 853; // https://www.ietf.org/archive/id/draft-ie
 static DEFAULT_TCP_REQUEST_TIMEOUT: u64 = 5;
 
 /// Server configuration
-#[derive(Deserialize, Debug)]
+#[derive(Debug)]
 pub struct Config {
     /// The list of IPv4 addresses to listen on
-    #[serde(default)]
     listen_addrs_ipv4: Vec<String>,
     /// This list of IPv6 addresses to listen on
-    #[serde(default)]
     listen_addrs_ipv6: Vec<String>,
     /// Port on which to listen (associated to all IPs)
     listen_port: Option<u16>,
@@ -58,7 +51,6 @@ pub struct Config {
     /// Base configuration directory, i.e. root path for zones
     directory: Option<String>,
     /// List of configurations for zones
-    #[serde(default)]
     zones: Vec<ZoneConfig>,
     /// Certificate to associate to TLS connections (currently the same is used for HTTPS and TLS)
     #[cfg(feature = "dnssec")]
@@ -66,14 +58,6 @@ pub struct Config {
 }
 
 impl Config {
-    /// read a Config file from the file specified at path.
-    pub fn read_config(path: &Path) -> ConfigResult<Self> {
-        let mut file: File = File::open(path)?;
-        let mut toml: String = String::new();
-        file.read_to_string(&mut toml)?;
-        toml.parse().map_err(Into::into)
-    }
-
     /// set of listening ipv4 addresses (for TCP and UDP)
     pub fn get_listen_addrs_ipv4(&self) -> Result<Vec<Ipv4Addr>, AddrParseError> {
         self.listen_addrs_ipv4.iter().map(|s| s.parse()).collect()
@@ -145,16 +129,8 @@ impl Config {
     }
 }
 
-impl FromStr for Config {
-    type Err = ConfigError;
-
-    fn from_str(toml: &str) -> ConfigResult<Self> {
-        toml::de::from_str(toml).map_err(Into::into)
-    }
-}
-
 /// Configuration for a zone
-#[derive(Deserialize, PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct ZoneConfig {
     /// name of the zone
     pub zone: String, // TODO: make Domain::Name decodable
@@ -169,10 +145,8 @@ pub struct ZoneConfig {
     /// Enable DnsSec TODO: should this move to StoreConfig?
     pub enable_dnssec: Option<bool>,
     /// Keys for use by the zone
-    #[serde(default)]
     pub keys: Vec<dnssec::KeyConfig>,
     /// Store configurations, TODO: allow chained Stores
-    #[serde(default)]
     pub stores: Option<StoreConfig>,
 }
 
